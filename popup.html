@@ -1,0 +1,149 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <title>LnkJump</title>
+    <style>
+        body {
+            font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+            padding: 16px;
+            width: 320px;
+            background: #f8f9fa;
+        }
+
+        h3 {
+            margin: 0 0 16px 0;
+            color: #2d3748;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .feature {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 12px;
+            margin: 8px 0;
+        }
+
+        .feature-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+
+        .feature-title {
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        .feature-desc {
+            font-size: 12px;
+            color: #718096;
+            margin-top: 4px;
+        }
+
+        .toggle {
+            position: relative;
+            width: 44px;
+            height: 24px;
+        }
+
+        .toggle input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #cbd5e0;
+            transition: .3s;
+            border-radius: 24px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
+        }
+
+        input:checked+.slider {
+            background-color: #4299e1;
+        }
+
+        input:checked+.slider:before {
+            transform: translateX(20px);
+        }
+
+        .action-btn {
+            background: #4299e1;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            width: 100%;
+            margin-top: 8px;
+            transition: background 0.2s;
+        }
+
+        .action-btn:hover {
+            background: #3182ce;
+        }
+
+        .status {
+            font-size: 11px;
+            color: #718096;
+            text-align: center;
+            margin-top: 12px;
+        }
+    </style>
+</head>
+
+<body>
+    <h3>🔗 LnkJump</h3>
+
+    <div class="feature">
+        <div class="feature-header">
+            <span class="feature-title">Hover Popup</span>
+            <label class="toggle">
+                <input type="checkbox" id="hoverPopup">
+                <span class="slider"></span>
+            </label>
+        </div>
+        <div class="feature-desc">Show real link when hovering over short links</div>
+    </div>
+
+    <div class="feature">
+        <div class="feature-header">
+            <span class="feature-title">Auto Navigate</span>
+            <span style="color: #38a169; font-size: 12px; font-weight: 500;">Always Enabled ✓</span>
+        </div>
+        <div class="feature-desc">Automatically redirect to real URL when clicking short links</div>
+    </div>
+
+    <div class="status">
+        Ready to jump links! 🚀
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+
+</html>
