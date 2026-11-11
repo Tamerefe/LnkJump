@@ -3,12 +3,22 @@
 // Global ayarlar
 let lnkJumpSettings = { hoverPopup: true };
 
+// Kısa link domainleri (background'dan gelen liste ile güncellenir)
+let shortHosts = [
+    "tr.ee", "linktr.ee",
+    "bit.ly", "t.co", "tinyurl.com", "goo.gl", "ow.ly", "buff.ly", "shorturl.at",
+    "lnkd.in", "is.gd", "t.ly", "cutt.ly", "rebrand.ly", "shrtco.de", "rb.gy",
+    "s.id", "v.gd", "u.to", "soo.gd", "adf.ly", "bc.vc", "t2mio.com", "bl.ink",
+    "youtu.be", "ouo.io"
+];
+
 // Ayarları yükle
 async function loadSettings() {
     try {
         const response = await chrome.runtime.sendMessage({ type: "GET_SETTINGS" });
         if (response && response.settings) {
             lnkJumpSettings = response.settings;
+            if (Array.isArray(response.settings.shortHosts)) shortHosts = response.settings.shortHosts;
             console.log('LnkJump: Settings loaded', lnkJumpSettings);
         }
     } catch (e) {
@@ -16,67 +26,51 @@ async function loadSettings() {
     }
 }
 
-// Kısa link domainleri
-const shortHosts = [
-    "tr.ee", "linktr.ee",
-    "bit.ly", "t.co", "tinyurl.com", "goo.gl", "ow.ly", "buff.ly", "shorturl.at",
-    "lnkd.in", "is.gd", "t.ly", "cutt.ly", "rebrand.ly", "shrtco.de", "rb.gy",
-    "s.id", "v.gd", "u.to", "soo.gd", "adf.ly", "bc.vc", "t2mio.com", "bl.ink",
-    "youtu.be", "linkedin.com", "ouo.io", "x.com"
-];
-
 // Kısa link kontrolü
 function isShortHost(href) {
+    if (!href) return false;
+
+    // file:// test sayfaları: .../bit.ly/abc gibi yol parçası
+    if (href.startsWith('file://')) {
+        const lowerHref = href.toLowerCase();
+        return shortHosts.some(sh => lowerHref.includes('/' + sh + '/'));
+    }
+
     try {
-        // file:// protokolü için özel kontrol
-        if (href.startsWith('file://')) {
-            const lowerHref = href.toLowerCase();
-            return shortHosts.some(sh => {
-                return lowerHref.includes('/' + sh + '/') ||
-                    lowerHref.includes(sh + '/') ||
-                    lowerHref.match(new RegExp('\\b' + sh.replace('.', '\\.') + '/'));
-            });
-        }
-
-        // Önce kısa domain kontrolü yap
-        const lowerHref = href.toLowerCase();
-        const directMatch = shortHosts.some(sh => {
-            return lowerHref.includes(sh + '/') ||
-                lowerHref.startsWith(sh + '/') ||
-                lowerHref.includes('/' + sh + '/') ||
-                lowerHref.match(new RegExp('\\b' + sh.replace('.', '\\.') + '/'));
-        });
-
-        if (directMatch) {
-            console.log(`LnkJump: Direct domain match found in ${href}`);
-            return true;
-        }
-
-        // Protokol yoksa https ekle
-        let normalizedHref = href;
-        if (!href.match(/^https?:\/\//)) {
-            normalizedHref = 'https://' + href.replace(/^\/\//, '');
-        }
-
-        const u = new URL(normalizedHref);
-        const h = u.hostname.toLowerCase();
-        const isShort = shortHosts.some(sh => h === sh || h.endsWith("." + sh));
-        console.log(`LnkJump: Checking ${href} -> normalized: ${normalizedHref} -> hostname: ${h}, isShort: ${isShort}`);
-        return isShort;
+        const u = new URL(href);
+        if (!/^https?:$/.test(u.protocol)) return false;
+        const h = u.hostname.toLowerCase().replace(/^www\./, "");
+        // Tam hostname eşleşmesi; substring eşleşmesi "netflix.com" -> "x.com" gibi hatalara yol açıyordu
+        if (shortHosts.some(sh => h === sh || h.endsWith("." + sh))) return true;
+        // Bilinen yönlendirme sarmalayıcıları
+        return (h.endsWith("linkedin.com") && u.pathname.startsWith("/safety/go")) ||
+            (/(^|\.)google\.[a-z.]+$/.test(h) && u.pathname === "/url") ||
+            (/^l[m]?\.facebook\.com$/.test(h) && u.pathname === "/l.php");
     } catch {
-        // Son çare: basit string kontrolü
-        const lowerHref = href.toLowerCase();
-        const isShort = shortHosts.some(sh =>
-            lowerHref.includes(sh + '/') ||
-            lowerHref.includes('www.' + sh + '/') ||
-            lowerHref.includes('//' + sh + '/') ||
-            lowerHref.startsWith(sh + '/') ||
-            lowerHref.match(new RegExp('\\b' + sh.replace('.', '\\.') + '/'))
-        );
-        console.log(`LnkJump: Fallback check for ${href}, isShort: ${isShort}`);
-        return isShort;
+        return false;
     }
 }
+
+// Context menu "Resolve and copy" için (service worker clipboard'a erişemiyor)
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    if (msg?.type !== "COPY_TEXT") return;
+    (async () => {
+        try {
+            await navigator.clipboard.writeText(msg.text);
+            sendResponse({ ok: true });
+        } catch {
+            const ta = document.createElement('textarea');
+            ta.value = msg.text;
+            ta.style.cssText = 'position:fixed;top:-1000px;opacity:0;';
+            document.body.appendChild(ta);
+            ta.select();
+            const ok = document.execCommand('copy');
+            ta.remove();
+            sendResponse({ ok });
+        }
+    })();
+    return true;
+});
 
 // URL çözme fonksiyonu - background script üzerinden
 async function resolveUrl(url) {
@@ -123,8 +117,8 @@ async function resolveUrl(url) {
         // Background script'e mesaj gönder
         const response = await new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
-                reject(new Error('Message timeout after 5 seconds'));
-            }, 5000);
+                reject(new Error('Message timeout after 20 seconds'));
+            }, 20000);
 
             chrome.runtime.sendMessage({
                 type: "RESOLVE_URL",
@@ -239,7 +233,10 @@ function updatePopup(popup, resolvedUrl, originalUrl, isLoading = false) {
                 displayUrl = displayUrl.substring(0, 57) + '...';
             }
 
-            contentEl.innerHTML = `<strong>${displayUrl}</strong>`;
+            contentEl.textContent = '';
+            const strong = document.createElement('strong');
+            strong.textContent = displayUrl;
+            contentEl.appendChild(strong);
             popup.style.pointerEvents = 'auto';
             popup.style.cursor = 'pointer';
 
@@ -258,7 +255,13 @@ function updatePopup(popup, resolvedUrl, originalUrl, isLoading = false) {
             // URL çözülemediyse veya aynıysa
             statusEl.textContent = 'Unable to resolve';
             statusEl.style.color = '#f7768e';
-            contentEl.innerHTML = `<em>Could not resolve this short link</em><br><small style="color: #565f89;">Original: ${originalUrl}</small>`;
+            contentEl.textContent = '';
+            const em = document.createElement('em');
+            em.textContent = 'Could not resolve this short link';
+            const small = document.createElement('small');
+            small.style.cssText = 'display: block; color: #565f89;';
+            small.textContent = 'Original: ' + originalUrl;
+            contentEl.append(em, small);
             popup.style.pointerEvents = 'none';
         }
     }
